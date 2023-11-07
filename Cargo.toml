@@ -9,3 +9,10 @@ edition = "2021"
 clap = { version = "4", features = ["derive"] }
 ron = "0.8"
 serde = { version = "1", features = ["derive"] }
+
+# NOTE: reduced size from 5.3Mb to 716Kb on ArchLinux machine
+[profile.release]
+strip = true  # Automatically strip symbols from the binary.
+opt-level = "z"  # Optimize for size.
+lto = true  # enable link time optimization
+codegen-units = 1

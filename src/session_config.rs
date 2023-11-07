@@ -1,7 +1,12 @@
-use serde::Deserialize;
-use std::{fs::File, io::Read, path::Path};
+use ron::ser::{to_string_pretty, PrettyConfig};
+use serde::{Deserialize, Serialize};
+use std::{
+    fs::File,
+    io::{self, Read, Write},
+    path::Path,
+};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TabConfig {
     pub name: String,
     #[serde(default)]
@@ -10,7 +15,7 @@ pub struct TabConfig {
     pub commands: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SessionConfig {
     pub session_name: String,
     pub tabs: Vec<TabConfig>,
@@ -32,4 +37,20 @@ pub fn load_config<P: AsRef<Path>>(path: P) -> Result<SessionConfig, ron::Error>
     let config: SessionConfig = ron::from_str(&contents)?;
 
     Ok(config)
+}
+
+pub fn save_config(path: &Path, session_config: &SessionConfig) -> Result<(), io::Error> {
+    // Serialize it to a string in RON format
+    let pretty_config = PrettyConfig::new()
+        .depth_limit(2)
+        .separate_tuple_members(true)
+        .enumerate_arrays(true);
+    let serialized =
+        to_string_pretty(&session_config, pretty_config).expect("Serialization failed");
+
+    // Write the string to a file
+    let mut file = File::create(&path)?;
+    file.write_all(serialized.as_bytes())?;
+
+    Ok(())
 }

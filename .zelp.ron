@@ -1,0 +1,9 @@
+SessionConfig(
+    session_name: "zelp_test_session",
+    tabs: [
+        ( name: "code", focus: true, commands: ["nvim"] ),
+        ( name: "cmd1", commands: ["clear"] ),
+        ( name: "monitoring", commands: ["btm"] ),
+        ( name: "cmd2"),
+    ],
+)

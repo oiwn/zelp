@@ -1,48 +1,60 @@
-use std::process::Command;
-use std::time::Duration;
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
-pub struct SessionConfig {
-    session_name: String,
+mod commands;
+mod session_config;
+
+use session_config::SessionConfig;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// Debug flag
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    debug: u8,
+
+    #[command(subcommand)]
+    command: Option<Commands>,
 }
 
-fn start_zellij_session(config: &SessionConfig) {
-    // This is a placeholder function. You would implement the logic to start Zellij
-    // and create panes according to the configuration here.
-
-    // Use the Command struct from the std::process module to run Zellij.
-    println!("Running zellij session: {}", &config.session_name);
-    let mut child = Command::new("zellij")
-        .args(&["attach", "--create", &config.session_name])
-        .spawn()
-        .expect("Failed to start Zellij session");
-
-    std::thread::sleep(Duration::from_millis(1500));
-
-    // zellij --session tst action new-tab --name code
-    println!("Creating new zellij tab");
-    let _ = Command::new("zellij")
-        .args(&[
-            "--session",
-            &config.session_name,
-            "action",
-            "new-tab",
-            "--name",
-            "code",
-        ])
-        .spawn()
-        .expect("Failed to create new pane");
-
-    // Here you would add the logic to configure the panes as needed.
-    // ...
-
-    // It is important to handle the child process appropriately.
-    // For a simple synchronous example, we can just wait for it to finish.
-    let _result = child.wait().expect("Failed to wait on Zellij");
+#[derive(Subcommand)]
+enum Commands {
+    Load { config_path: Option<PathBuf> },
+    // Check configuration
+    Check { config_path: Option<PathBuf> },
 }
 
 fn main() {
-    let conf = SessionConfig {
-        session_name: "test".into(),
-    };
-    start_zellij_session(&conf);
+    let cli = Cli::parse();
+
+    // NOTE: do i even need any logging?
+    match cli.debug {
+        0 => println!("setup no log"),
+        1 => println!("setup low log level "),
+        _ => println!("setup verbose mode"),
+    }
+
+    match &cli.command {
+        Some(Commands::Load { config_path }) => {
+            let default_config_path = PathBuf::from(".zelp.ron");
+            let path = match config_path {
+                Some(path) => path.as_path(),
+                None => &default_config_path.as_path(),
+            };
+            println!("Loading config: {:?}", path);
+            let conf = SessionConfig::new(path);
+            println!("Config: {:?}", &conf);
+            commands::start_session(&conf);
+        }
+        Some(Commands::Check { config_path }) => {
+            let default_config_path = PathBuf::from(".zelp.ron");
+            let path = match config_path {
+                Some(path) => path.as_path(),
+                None => &default_config_path.as_path(),
+            };
+            let conf = SessionConfig::new(path);
+            println!("Config: {:?}", &conf);
+        }
+        None => {}
+    }
 }

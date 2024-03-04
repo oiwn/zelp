@@ -42,7 +42,7 @@ fn main() {
             let default_confg = SessionConfig {
                 session_name: "deafult".into(),
                 tabs: vec![TabConfig {
-                    name: "code".into(),
+                    name: "pane1".into(),
                     focus: true,
                     commands: vec!["nano".into()],
                 }],

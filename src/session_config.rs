@@ -18,6 +18,7 @@ pub struct TabConfig {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SessionConfig {
     pub session_name: String,
+    pub shell_command_before: String,
     pub tabs: Vec<TabConfig>,
 }
 
@@ -29,8 +30,8 @@ impl SessionConfig {
 
 /// Function to load the RON config file into the SessionConfig struct.
 pub fn load_config<P: AsRef<Path>>(path: P) -> Result<SessionConfig, ron::Error> {
-    let mut file =
-        File::open(&path).expect(&format!("Failed to open file: {}", path.as_ref().display()));
+    let mut file = File::open(&path)
+        .expect(&format!("Failed to open file: {}", path.as_ref().display()));
     let mut contents = String::new();
     file.read_to_string(&mut contents)
         .expect(&format!("Failed to read file: {}", path.as_ref().display()));
@@ -39,14 +40,17 @@ pub fn load_config<P: AsRef<Path>>(path: P) -> Result<SessionConfig, ron::Error>
     Ok(config)
 }
 
-pub fn save_config(path: &Path, session_config: &SessionConfig) -> Result<(), io::Error> {
+pub fn save_config(
+    path: &Path,
+    session_config: &SessionConfig,
+) -> Result<(), io::Error> {
     // Serialize it to a string in RON format
     let pretty_config = PrettyConfig::new()
         .depth_limit(2)
         .separate_tuple_members(true)
         .enumerate_arrays(true);
-    let serialized =
-        to_string_pretty(&session_config, pretty_config).expect("Serialization failed");
+    let serialized = to_string_pretty(&session_config, pretty_config)
+        .expect("Serialization failed");
 
     // Write the string to a file
     let mut file = File::create(&path)?;

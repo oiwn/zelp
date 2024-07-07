@@ -1,19 +1,92 @@
 use crate::SessionConfig;
-use std::{process::Command, thread, time::Duration};
+use std::{
+    io,
+    process::{Child, Command, ExitStatus},
+    thread,
+    time::Duration,
+};
 
-// NOTE: i think i'll need to implement it like this in future
-// or check if it's possible to implement it as plugin
-// enum ZellijCommand {
-//     // Tabs
-//     RenameTab {},
-//     GoToTab {},
-//     GoToTabName {},
-//     NewTab {},
-//     QueryTabNames {},
-//     WriteChars {},
-// }
+const MAX_RETRIES: usize = 5;
+
+pub enum ZellijCommand<'a> {
+    NewTab {
+        session_name: &'a str,
+        tab_name: Option<&'a str>,
+    },
+}
+
+impl<'a> ZellijCommand<'a> {
+    pub fn execute(&self) -> io::Result<Child> {
+        match self {
+            ZellijCommand::NewTab {
+                session_name,
+                tab_name,
+            } => {
+                log::info!("NewTab command with params: {{ session_name: {}, tab_name: {:?} }}", 
+                    session_name, tab_name
+                );
+                let mut args =
+                    vec!["--session", session_name, "action", "new-tab"];
+                if let Some(name) = tab_name {
+                    args.push("--name");
+                    args.push(name);
+                }
+                let result = Command::new("zellij").args(&args).spawn();
+                if let Err(e) = &result {
+                    log::error!("Failed to create new tab: {}", e);
+                }
+                result
+            }
+        }
+    }
+}
 
 pub fn start_session(config: &SessionConfig) {
+    log::debug!("Running zellij session: {}", &config.session_name);
+
+    // Check session exist, if yes fail with error!
+    if check_session_exists(&config.session_name) {
+        panic!("Session already exists!");
+    }
+    // Create new session with name as in config
+    // this will create child process to this cli tool which
+    // should be released at the end of this function
+    let mut session_child = Command::new("zellij")
+        .args(&["attach", "--create", &config.session_name])
+        .spawn()
+        .expect("Failed to start Zellij session");
+    // Have to wait a bit till it will be created
+    for _ in 1..MAX_RETRIES {
+        if check_session_exists(&config.session_name) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    // Open required amount of tabs
+    for _ in 1..config.tabs.len() {
+        let _ = ZellijCommand::NewTab {
+            session_name: config.session_name.as_str(),
+            tab_name: None,
+        }
+        .execute();
+    }
+    // Change tab names and run commands per tab (run common shell command too)
+
+    /*
+    for tab in &config.tabs {
+        ZellijCommand::NewTab {
+            session_name: config.session_name.clone(),
+            tab_name: tab.name.clone(),
+        }
+        .execute()
+        .unwrap();
+    }
+    */
+
+    let _ = session_child.wait().expect("Failed to wait on Zellij");
+}
+
+pub fn start_session_old(config: &SessionConfig) {
     // This is a placeholder function. You would implement the logic to start Zellij
     // and create panes according to the configuration here.
 
@@ -24,12 +97,11 @@ pub fn start_session(config: &SessionConfig) {
         .spawn()
         .expect("Failed to start Zellij session");
 
-    for _ in 0..10 {
+    for _ in 1..MAX_RETRIES {
         if check_session_exists(&config.session_name) {
             break;
-        } else {
-            thread::sleep(Duration::from_millis(50));
         }
+        thread::sleep(Duration::from_millis(50));
     }
     // Here need add the logic to configure the panes as needed.
     load_tabs(config);

@@ -7,8 +7,10 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+log = "0.4.22"
 ron = "0.8"
 serde = { version = "1", features = ["derive"] }
+simplelog = "0.12.2"
 
 # NOTE: reduced size from 5.3Mb to 716Kb on ArchLinux machine
 [profile.release]

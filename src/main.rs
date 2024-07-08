@@ -76,7 +76,7 @@ fn main() {
             let default_config_path = PathBuf::from(".zelp.ron");
             let path = match config_path {
                 Some(path) => path.as_path(),
-                None => &default_config_path.as_path(),
+                None => default_config_path.as_path(),
             };
             log::info!("Loading config: {:?}", path);
             let conf = SessionConfig::new(path);
@@ -87,7 +87,7 @@ fn main() {
             let default_config_path = PathBuf::from(".zelp.ron");
             let path = match config_path {
                 Some(path) => path.as_path(),
-                None => &default_config_path.as_path(),
+                None => default_config_path.as_path(),
             };
             let conf = SessionConfig::new(path);
             log::info!("Config: {:?}", &conf);

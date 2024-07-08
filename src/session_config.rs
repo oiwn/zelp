@@ -30,11 +30,13 @@ impl SessionConfig {
 
 /// Function to load the RON config file into the SessionConfig struct.
 pub fn load_config<P: AsRef<Path>>(path: P) -> Result<SessionConfig, ron::Error> {
-    let mut file = File::open(&path)
-        .expect(&format!("Failed to open file: {}", path.as_ref().display()));
+    let mut file = File::open(&path).unwrap_or_else(|_| {
+        panic!("Failed to open file: {}", path.as_ref().display())
+    });
     let mut contents = String::new();
-    file.read_to_string(&mut contents)
-        .expect(&format!("Failed to read file: {}", path.as_ref().display()));
+    file.read_to_string(&mut contents).unwrap_or_else(|_| {
+        panic!("Failed to open file: {}", path.as_ref().display())
+    });
     let config: SessionConfig = ron::from_str(&contents)?;
 
     Ok(config)
@@ -53,7 +55,7 @@ pub fn save_config(
         .expect("Serialization failed");
 
     // Write the string to a file
-    let mut file = File::create(&path)?;
+    let mut file = File::create(path)?;
     file.write_all(serialized.as_bytes())?;
 
     Ok(())

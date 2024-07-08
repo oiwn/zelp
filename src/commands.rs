@@ -7,6 +7,7 @@ use std::{
 };
 
 const MAX_RETRIES: usize = 5;
+const DELAYS_MS: Duration = Duration::from_millis(150);
 
 pub enum ZellijCommand<'a> {
     NewTab {
@@ -127,7 +128,7 @@ pub fn start_session(config: &SessionConfig) {
     // this will create child process to this cli tool which
     // should be released at the end of this function
     let mut session_child = Command::new("zellij")
-        .args(&["attach", "--create", &config.session_name])
+        .args(["attach", "--create", &config.session_name])
         .spawn()
         .expect("Failed to start Zellij session");
     // Have to wait a bit till it will be created
@@ -139,12 +140,14 @@ pub fn start_session(config: &SessionConfig) {
     }
     // Open required amount of tabs, notice one should be open on session create
     for _ in 1..config.tabs.len() {
-        let _ = ZellijCommand::NewTab {
+        let res = ZellijCommand::NewTab {
             session_name: config.session_name.as_str(),
             tab_name: None,
         }
         .execute();
+        res.unwrap().wait().unwrap();
     }
+    thread::sleep(DELAYS_MS);
     // Change tab names and run commands per tab (run common shell command too)
     let mut focus_idx = 1;
     for (idx, tab) in config.tabs.iter().enumerate() {
@@ -159,6 +162,7 @@ pub fn start_session(config: &SessionConfig) {
         }
         .execute();
         res.unwrap().wait().unwrap();
+        thread::sleep(DELAYS_MS);
         // raname tab
         let res = ZellijCommand::RenameTab {
             session_name: config.session_name.as_str(),
@@ -166,21 +170,24 @@ pub fn start_session(config: &SessionConfig) {
         }
         .execute();
         res.unwrap().wait().unwrap();
+        thread::sleep(DELAYS_MS);
         // call shell_command_before
         let res = ZellijCommand::WriteChars {
-            session_name: &config.session_name.as_str(),
+            session_name: config.session_name.as_str(),
             chars: format!("{}\n", config.shell_command_before).as_str(),
         }
         .execute();
         res.unwrap().wait().unwrap();
+        thread::sleep(DELAYS_MS);
         // call required commands in tab
         for command in tab.commands.iter() {
             let res = ZellijCommand::WriteChars {
-                session_name: &config.session_name.as_str(),
+                session_name: config.session_name.as_str(),
                 chars: format!("{}\n", command).as_str(),
             }
             .execute();
             res.unwrap().wait().unwrap();
+            thread::sleep(DELAYS_MS);
         }
     }
 
@@ -198,7 +205,7 @@ pub fn start_session(config: &SessionConfig) {
 fn check_session_exists(session_name: &str) -> bool {
     // get sessions list
     let output = Command::new("zellij")
-        .args(&["list-sessions"])
+        .args(["list-sessions"])
         .output()
         .expect("Failed to execute Zellij 'list-sessions' command");
 

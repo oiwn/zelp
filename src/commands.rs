@@ -1,7 +1,7 @@
 use crate::SessionConfig;
 use std::{
     io,
-    process::{Child, Command, ExitStatus},
+    process::{Child, Command},
     thread,
     time::Duration,
 };
@@ -13,6 +13,18 @@ pub enum ZellijCommand<'a> {
         session_name: &'a str,
         tab_name: Option<&'a str>,
     },
+    GoToTab {
+        session_name: &'a str,
+        tab_index: usize,
+    },
+    RenameTab {
+        session_name: &'a str,
+        new_name: &'a str,
+    },
+    WriteChars {
+        session_name: &'a str,
+        chars: &'a str,
+    },
 }
 
 impl<'a> ZellijCommand<'a> {
@@ -22,7 +34,7 @@ impl<'a> ZellijCommand<'a> {
                 session_name,
                 tab_name,
             } => {
-                log::info!("NewTab command with params: {{ session_name: {}, tab_name: {:?} }}", 
+                log::info!("NewTab cmd with params: {{ session_name: {}, tab_name: {:?} }}", 
                     session_name, tab_name
                 );
                 let mut args =
@@ -37,6 +49,69 @@ impl<'a> ZellijCommand<'a> {
                 }
                 result
             }
+            ZellijCommand::GoToTab {
+                session_name,
+                tab_index,
+            } => {
+                log::info!(
+                    "GoToTab cmd with params {{ session_name: {}, tab_index: {} }}",
+                    session_name,
+                    tab_index
+                );
+                let idx = tab_index.to_string();
+                let args =
+                    vec!["--session", session_name, "action", "go-to-tab", &idx];
+                let result = Command::new("zellij").args(&args).spawn();
+                if let Err(e) = &result {
+                    log::error!("Failed to go-to-tab: {}", e);
+                }
+                result
+            }
+            ZellijCommand::RenameTab {
+                session_name,
+                new_name,
+            } => {
+                log::info!(
+                    "RenameTab cmd with params {{ session_name: {}, new_name: {} }}",
+                    session_name,
+                    new_name
+                );
+                let args = vec![
+                    "--session",
+                    session_name,
+                    "action",
+                    "rename-tab",
+                    new_name,
+                ];
+                let result = Command::new("zellij").args(&args).spawn();
+                if let Err(e) = &result {
+                    log::error!("Failed to rename-tab: {}", e);
+                }
+                result
+            }
+            ZellijCommand::WriteChars {
+                session_name,
+                chars,
+            } => {
+                log::info!(
+                    "WriteChars cmd with params {{ session_name: {}, chars: {} }}",
+                    session_name,
+                    chars
+                );
+                let command_with_enter = format!("{}\n", &chars);
+                let args = vec![
+                    "--session",
+                    session_name,
+                    "action",
+                    "write-chars",
+                    &command_with_enter,
+                ];
+                let result = Command::new("zellij").args(&args).spawn();
+                if let Err(e) = &result {
+                    log::error!("Failed to rename-tab: {}", e);
+                }
+                result
+            }
         }
     }
 }
@@ -46,7 +121,7 @@ pub fn start_session(config: &SessionConfig) {
 
     // Check session exist, if yes fail with error!
     if check_session_exists(&config.session_name) {
-        panic!("Session already exists!");
+        panic!("Session {} already exists!", &config.session_name);
     }
     // Create new session with name as in config
     // this will create child process to this cli tool which
@@ -62,7 +137,7 @@ pub fn start_session(config: &SessionConfig) {
         }
         thread::sleep(Duration::from_millis(50));
     }
-    // Open required amount of tabs
+    // Open required amount of tabs, notice one should be open on session create
     for _ in 1..config.tabs.len() {
         let _ = ZellijCommand::NewTab {
             session_name: config.session_name.as_str(),
@@ -71,44 +146,53 @@ pub fn start_session(config: &SessionConfig) {
         .execute();
     }
     // Change tab names and run commands per tab (run common shell command too)
-
-    /*
-    for tab in &config.tabs {
-        ZellijCommand::NewTab {
-            session_name: config.session_name.clone(),
-            tab_name: tab.name.clone(),
+    let mut focus_idx = 1;
+    for (idx, tab) in config.tabs.iter().enumerate() {
+        // Store focused tab index
+        if tab.focus {
+            focus_idx = idx + 1;
         }
-        .execute()
-        .unwrap();
+        // focus tab
+        let res = ZellijCommand::GoToTab {
+            session_name: config.session_name.as_str(),
+            tab_index: idx + 1,
+        }
+        .execute();
+        res.unwrap().wait().unwrap();
+        // raname tab
+        let res = ZellijCommand::RenameTab {
+            session_name: config.session_name.as_str(),
+            new_name: &tab.name,
+        }
+        .execute();
+        res.unwrap().wait().unwrap();
+        // call shell_command_before
+        let res = ZellijCommand::WriteChars {
+            session_name: &config.session_name.as_str(),
+            chars: format!("{}\n", config.shell_command_before).as_str(),
+        }
+        .execute();
+        res.unwrap().wait().unwrap();
+        // call required commands in tab
+        for command in tab.commands.iter() {
+            let res = ZellijCommand::WriteChars {
+                session_name: &config.session_name.as_str(),
+                chars: format!("{}\n", command).as_str(),
+            }
+            .execute();
+            res.unwrap().wait().unwrap();
+        }
     }
-    */
+
+    // Focus required tab
+    let res = ZellijCommand::GoToTab {
+        session_name: &config.session_name,
+        tab_index: focus_idx,
+    }
+    .execute();
+    res.unwrap().wait().unwrap();
 
     let _ = session_child.wait().expect("Failed to wait on Zellij");
-}
-
-pub fn start_session_old(config: &SessionConfig) {
-    // This is a placeholder function. You would implement the logic to start Zellij
-    // and create panes according to the configuration here.
-
-    // Use the Command struct from the std::process module to run Zellij.
-    println!("Running zellij session: {}", &config.session_name);
-    let mut child = Command::new("zellij")
-        .args(&["attach", "--create", &config.session_name])
-        .spawn()
-        .expect("Failed to start Zellij session");
-
-    for _ in 1..MAX_RETRIES {
-        if check_session_exists(&config.session_name) {
-            break;
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-    // Here need add the logic to configure the panes as needed.
-    load_tabs(config);
-
-    // It is important to handle the child process appropriately.
-    // For a simple synchronous code, can just wait for it to finish.
-    let _result = child.wait().expect("Failed to wait on Zellij");
 }
 
 fn check_session_exists(session_name: &str) -> bool {
@@ -120,82 +204,4 @@ fn check_session_exists(session_name: &str) -> bool {
 
     let sessions = String::from_utf8_lossy(&output.stdout);
     sessions.contains(session_name)
-}
-
-fn load_tabs(config: &SessionConfig) {
-    // std::thread::sleep(Duration::from_millis(2000));
-    if let Some((first_tab, rest_of_tabs)) = config.tabs.split_first() {
-        // zellij action rename-tab "alice the cat"
-        println!("Renaming current zellij tab");
-        let mut res = Command::new("zellij")
-            .args(&[
-                "--session",
-                &config.session_name,
-                "action",
-                "rename-tab",
-                &first_tab.name,
-            ])
-            .spawn()
-            .expect("Failed to rename tab!");
-        let _ = res.wait().expect("Renaming tab failed");
-
-        // std::thread::sleep(Duration::from_millis(2000));
-
-        for tab in rest_of_tabs {
-            // zellij --session tst action new-tab --name code
-            println!("Creating new zellij tab");
-            let mut res = Command::new("zellij")
-                .args(&[
-                    "--session",
-                    &config.session_name,
-                    "action",
-                    "new-tab",
-                    "--name",
-                    &tab.name,
-                ])
-                .spawn()
-                .expect("Failed to create new pane");
-            let _ = res.wait().expect("Waiting for tabs to load failed");
-        }
-    } else {
-        println!("No tabs found");
-    };
-
-    // So here we are with all required tabs loaded and named properly
-    // Now need to:
-    // 1) focus on appropriate tab
-    // 2) run commands inside tabs
-
-    for tab in &config.tabs {
-        // zellij action go-to-tab-name "blabla"
-        println!("Move focus to tab: {}", &tab.name);
-        let mut res = Command::new("zellij")
-            .args(&[
-                "--session",
-                &config.session_name,
-                "action",
-                "go-to-tab-name",
-                &tab.name,
-            ])
-            .spawn()
-            .expect("Failed to move focus");
-        let _ = res.wait().expect("Failed to run focus ");
-
-        // zellij action write-chars "helix"
-        for command in &tab.commands {
-            let command_with_enter = format!("{}\n", &command);
-            Command::new("zellij")
-                .args(&["action", "write-chars", &command_with_enter])
-                .status()
-                .expect("Failed to write chars to Zellij");
-        }
-    }
-
-    // focus on first for now
-    Command::new("zellij")
-        .args(&["action", "go-to-tab", "1"])
-        .status()
-        .expect("Failed to focus to tab");
-
-    // // std::thread::sleep(Duration::from_millis(2000));
 }

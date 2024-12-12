@@ -30,9 +30,13 @@ impl SessionConfig {
 
 /// Function to load the RON config file into the SessionConfig struct.
 pub fn load_config<P: AsRef<Path>>(path: P) -> Result<SessionConfig, ron::Error> {
-    let mut file = File::open(&path).unwrap_or_else(|_| {
-        panic!("Failed to open file: {}", path.as_ref().display())
-    });
+    let mut file = File::open(&path).map_err(|e| {
+        ron::Error::Message(format!(
+            "Failed to open file {}: {}",
+            path.as_ref().display(),
+            e
+        ))
+    })?;
     let mut contents = String::new();
     file.read_to_string(&mut contents).unwrap_or_else(|_| {
         panic!("Failed to open file: {}", path.as_ref().display())
